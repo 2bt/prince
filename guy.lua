@@ -113,13 +113,21 @@ function Guy:update()
 
 
 	if not self.in_air then
+		-- jump
 		if jump and not self.jump then
 			self.vy = -4
+			self.jump_control = true
 		end
 		self.rope_state = "off"
 	else
-		if not self.rope_state ~= "off" and self.jump and not jump and self.vy < -1 then
-			self.vy = -1
+
+		if self.jump_control then
+			if not jump and self.vy < -1 then
+				self.vy = -1
+				self.jump_control = false
+			elseif self.vy > -1 then
+				self.jump_control = false
+			end
 		end
 
 
