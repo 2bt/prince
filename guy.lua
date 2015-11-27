@@ -156,9 +156,47 @@ function Guy:update()
 
 		if self.rope_state == "off" then
 
+			-- shoot rope
+			if  jump and not self.jump then
 
-			-- grap edge
-			if self.vy > 0 then
+
+				-- try different angles
+				local min_d = self.rope_length_max + 10
+				local min_dx
+				local min_dy
+				local i = 0
+				for a = 35, 90 do
+					local dx = math.cos(a * math.pi / 180) * self.dir
+					local dy = -math.sin(a * math.pi / 180)
+					if not min_dx then
+						min_dx = dx
+						min_dy = dy
+					end
+
+					local d = map:rayIntersection(self.x, self.y, dx, dy)
+					if d and d < min_d then
+						min_d = d
+						min_dx = dx
+						min_dy = dy
+						if d <= self.rope_length_max - 4 then
+							i = i + 1
+							if i > 4 then break end
+						end
+					end
+				end
+
+
+				self.rope_state = "extend"
+				self.rope_dx = min_dx
+				self.rope_dy = min_dy
+				self.rope_x = self.x + self.rope_dx * 15
+				self.rope_y = self.y + self.rope_dy * 15
+
+
+
+			-- cliff hanger
+			elseif self.vy > 0 then
+
 				self.box = nil
 				local dx = map:collision({ self.x - 5 + self.dir * 2, self.y - 2, 10, 14 }, "x")
 				if dx ~= 0 then
@@ -179,47 +217,6 @@ function Guy:update()
 					end
 				end
 			end
-
-
-		end
-
-
-		-- shoot rope
-		if self.rope_state == "off" and jump and not self.jump then
-
-
-			-- try different angles
-			local min_d = self.rope_length_max + 10
-			local min_dx
-			local min_dy
-			local i = 0
-			for a = 35, 90 do
-				local dx = math.cos(a * math.pi / 180) * self.dir
-				local dy = -math.sin(a * math.pi / 180)
-				if not min_dx then
-					min_dx = dx
-					min_dy = dy
-				end
-
-				local d = map:rayIntersection(self.x, self.y, dx, dy)
-				if d and d < min_d then
-					min_d = d
-					min_dx = dx
-					min_dy = dy
-					if d <= self.rope_length_max - 4 then
-						i = i + 1
-						if i > 4 then break end
-					end
-				end
-			end
-
-
-			self.rope_state = "extend"
-			self.rope_dx = min_dx
-			self.rope_dy = min_dy
-			self.rope_x = self.x + self.rope_dx * 15
-			self.rope_y = self.y + self.rope_dy * 15
-
 
 
 		elseif self.rope_state == "extend" then
@@ -305,6 +302,7 @@ function Guy:update()
 		end
 
 	end
+
 
 
 	-- curtail rope
