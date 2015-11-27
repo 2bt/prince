@@ -160,22 +160,21 @@ function Guy:update()
 			-- grap edge
 			if self.vy > 0 then
 				self.box = nil
-				local dx = map:collision({ self.x - 5 + self.dir * 1, self.y - 2, 10, 14 }, "x")
+				local dx = map:collision({ self.x - 5 + self.dir * 2, self.y - 2, 10, 14 }, "x")
 				if dx ~= 0 then
-					local box = { self.x - 5 + self.dir * 3, self.y - 3, 10, 10 }
+					local box = { self.x - 5 + self.dir * 3, self.y - 7, 10, 10 }
 					local dy = map:collision(box, "y")
 					box[2] = box[2] + dy
 
---					if -10 < dy and dy < -3 then
-					if -10 < dy and dy <= -6 then
+					if -7 < dy and dy <= -2 then
 
 						-- debug
 						--self.box = box
 
 						self.vy = 0
 						self.vx = 0
-						self.x = self.x + dx + self.dir
-						self.y = self.y + dy + 7
+						self.x = self.x + dx + self.dir * 2
+						self.y = self.y + dy + 3
 						self.state = "cliff"
 					end
 				end
@@ -336,7 +335,16 @@ function Guy:draw()
 	-- rope
 	G.setColor(178, 220, 239)
 	if self.rope_length > 0 then
-		G.line(self.x, self.y, self.rope_x, self.rope_y)
+
+		local j = 0
+		for i = self.rope_length, 0, -3 do
+
+			local x = self.x + (self.rope_x - self.x) * i / self.rope_length
+			local y = self.y + (self.rope_y - self.y) * i / self.rope_length
+
+			G.rectangle("fill", x-1, y-1, 2, 2)
+		end
+--		G.line(self.x, self.y, self.rope_x, self.rope_y)
 	end
 
 
