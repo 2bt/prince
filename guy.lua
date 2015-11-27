@@ -184,67 +184,73 @@ function Guy:update()
 		end
 
 
+		-- shoot rope
 		if self.rope_state == "off" and jump and not self.jump then
 
 
 			-- try different angles
+			local min_d = self.rope_length_max + 10
+			local min_dx
+			local min_dy
+			local i = 0
 			for a = 35, 90 do
 				local dx = math.cos(a * math.pi / 180) * self.dir
 				local dy = -math.sin(a * math.pi / 180)
+				if not min_dx then
+					min_dx = dx
+					min_dy = dy
+				end
+
 				local d = map:rayIntersection(self.x, self.y, dx, dy)
-				if d and d <= self.rope_length_max then
-					self.rope_length = d
-					self.rope_state = "loose"
-					self.rope_x = self.x + dx * d
-					self.rope_y = self.y + dy * d
-					break
+				if d and d < min_d then
+					min_d = d
+					min_dx = dx
+					min_dy = dy
+					if d <= self.rope_length_max - 4 then
+						i = i + 1
+						if i > 4 then break end
+					end
 				end
 			end
 
 
+			self.rope_state = "extend"
+			self.rope_dx = min_dx
+			self.rope_dy = min_dy
+			self.rope_x = self.x + self.rope_dx * 15
+			self.rope_y = self.y + self.rope_dy * 15
 
---			local dx = self.dir / (2^0.5)
---			local dy = -1 / (2^0.5)
---			local d = map:rayIntersection(self.x, self.y, dx, dy)
---			if d and d <= self.rope_length_max then
---				self.rope_length = d
---				self.rope_state = "loose"
---				self.rope_x = self.x + dx * d
---				self.rope_y = self.y + dy * d
---			end
 
---			self.rope_x = self.x
---			self.rope_y = self.y
---			self.rope_dx = 0
---			self.rope_dy = 0
---			self.rope_state = "extend"
 
---		elseif self.rope_state == "extend" then
---
---			local dx = self.dir / (2^0.5) * 10
---			local dy =       -1 / (2^0.5) * 10
---
---			self.rope_dx = self.rope_dx + dx
---			self.rope_dy = self.rope_dy + dy
---			self.rope_x = self.x + self.rope_dx
---			self.rope_y = self.y + self.rope_dy
---
---			self.rope_length = (self.rope_dx^2 + self.rope_dx^2)^0.5
---			if self.rope_length > self.rope_length_max then
---				self.rope_state = "off"
---			else
---
---				local d = map:rayIntersection(self.x, self.y, self.rope_dx, self.rope_dy)
---				if d and d <= 1 then
---					self.rope_length = self.rope_length * d
---					self.rope_state = "loose"
---					self.rope_x = self.x + self.rope_dx * d
---					self.rope_y = self.y + self.rope_dy * d
---				end
---
---			end
+		elseif self.rope_state == "extend" then
 
-		elseif self.rope_state ~= "off" then
+			self.rope_x = self.rope_x + self.rope_dx * 15
+			self.rope_y = self.rope_y + self.rope_dy * 15
+
+			local dx = self.rope_x - self.x
+			local dy = self.rope_y - self.y
+
+			local len = (dx^2 + dy^2)^0.5
+
+			if len > self.rope_length_max then
+				dx = dx / len * self.rope_length_max
+				dy = dy / len * self.rope_length_max
+				len = self.rope_length_max
+			end
+			self.rope_length = len
+
+			local d = map:rayIntersection(self.x, self.y, dx, dy)
+			if d and d <= 1 then
+				self.rope_length = len * d
+				self.rope_state = "loose"
+				self.rope_x = self.x + dx * d
+				self.rope_y = self.y + dy * d
+			elseif len == self.rope_length_max then
+				self.rope_state = "off"
+			end
+
+		elseif self.rope_state == "loose"
+		or self.rope_state == "tight" then
 
 			-- change rope lengt
 			self.rope_length = math.max(10, math.min(self.rope_length_max, self.rope_length + iy))
@@ -306,9 +312,9 @@ function Guy:update()
 		self.rope_length = math.max(0, self.rope_length - 5)
 		local dx = self.rope_x - self.x
 		local dy = self.rope_y - self.y
-		local l = (dx^2 + dy^2)^0.5
-		self.rope_x = self.x + dx / l * self.rope_length
-		self.rope_y = self.y + dy / l * self.rope_length
+		local len = (dx^2 + dy^2)^0.5
+		self.rope_x = self.x + dx / len * self.rope_length
+		self.rope_y = self.y + dy / len * self.rope_length
 	end
 
 
@@ -334,29 +340,30 @@ function Guy:draw()
 
 	-- rope
 	G.setColor(178, 220, 239)
-	if self.rope_length > 0 then
+	local dx = self.rope_x - self.x
+	local dy = self.rope_y - self.y
+	local len = (dx^2 + dy^2)^0.5
 
-		local j = 0
-		for i = self.rope_length, 0, -3 do
+	local j = 0
+	for i = len, 0, -3 do
 
-			local x = self.x + (self.rope_x - self.x) * i / self.rope_length
-			local y = self.y + (self.rope_y - self.y) * i / self.rope_length
+		local x = self.x + (self.rope_x - self.x) * i / len
+		local y = self.y + (self.rope_y - self.y) * i / len
 
-			G.rectangle("fill", x-1, y-1, 2, 2)
-		end
---		G.line(self.x, self.y, self.rope_x, self.rope_y)
+		G.rectangle("fill", x-1, y-1, 2, 2)
 	end
 
 
 	local f = self.anim[math.floor(self.tick / self.frame_length) % #self.anim + 1]
 	if self.state == "air" then
-		if math.abs(self.vy) < 1 then
-			f = self.anims.jump[3]
-		elseif math.abs(self.vy) < 3 then
-			f = self.anims.jump[2]
-		else
-			f = self.anims.jump[1]
-		end
+		f = self.anims.jump[1]
+--		if math.abs(self.vy) < 1 then
+--			f = self.anims.jump[3]
+--		elseif math.abs(self.vy) < 3 then
+--			f = self.anims.jump[2]
+--		else
+--			f = self.anims.jump[1]
+--		end
 	elseif self.state == "cliff" then
 		f = self.anims.cliff[1]
 	end
