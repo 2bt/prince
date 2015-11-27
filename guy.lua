@@ -33,6 +33,7 @@ Guy = Object:new {
 		idle = { 1 },
 		run = { 3, 4, 5, 19, 20, 21, },
 		jump = { 34, 35, 36 },
+		cliff = { 51 },
 	},
 	rope_length_max = 40
 }
@@ -48,6 +49,9 @@ function Guy:init()
 
 	self.rope_length = 0
 	self.rope_state = "off"
+	self.rope_x = 0
+	self.rope_y = 0
+	self.state = "air"
 end
 
 
@@ -60,9 +64,10 @@ function Guy:update()
 
 
 
-	if not self.in_air then
+	if self.state == "floor" then
 		self.vx = math.max(self.vx - 0.25, math.min(self.vx + 0.25, ix * 1))
-	else
+
+	elseif self.state == "air" then
 		if self.rope_state == "tight" then
 
 			local dx = self.x - self.rope_x
@@ -79,7 +84,22 @@ function Guy:update()
 			local m = math.max(1, math.abs(self.vx))
 			self.vx = math.max(-m, math.min(m, self.vx + ix * 0.175))
 		end
+
+	elseif self.state == "cliff" then
+
+		-- let go
+		if iy > 0
+		or ix == -self.dir then
+			self.state = "air"
+		end
+
 	end
+	if ix ~= 0 then
+		self.dir = ix
+	end
+
+
+
 	local vx = math.min(3, math.max(-3, self.vx))
 	self.x = self.x + vx
 
@@ -92,34 +112,37 @@ function Guy:update()
 	end
 
 
-	self.vy = self.vy + 0.2
-	local vy = math.min(3, math.max(-3, self.vy))
-	self.y = self.y + vy
 
+	if self.state == "air" or self.state == "floor" then
 
+		self.vy = self.vy + 0.2		-- gravity
+		local vy = math.min(3, math.max(-3, self.vy))
+		self.y = self.y + vy
 
-	-- horizontal collision
-	self.in_air = true
-	local dy = map:collision({ self.x - 5, self.y - 2, 10, 14 }, "y")
-	if dy ~= 0 then
-		self.y = self.y + dy
-		self.vy = 0
-		if dy < 0 then
-			self.in_air = false
+		-- horizontal collision
+		self.state = "air"
+		local dy = map:collision({ self.x - 5, self.y - 2, 10, 14 }, "y")
+		if dy ~= 0 then
+			self.y = self.y + dy
+			self.vy = 0
+			if dy < 0 then
+				self.state = "floor"
+			end
 		end
+
 	end
 
 
+	if self.state == "floor" then
+		self.rope_state = "off"
 
-
-	if not self.in_air then
 		-- jump
 		if jump and not self.jump then
 			self.vy = -4
 			self.jump_control = true
 		end
-		self.rope_state = "off"
-	else
+
+	elseif self.state == "air" then
 
 		if self.jump_control then
 			if not jump and self.vy < -1 then
@@ -130,6 +153,36 @@ function Guy:update()
 			end
 		end
 
+
+		if self.rope_state == "off" then
+
+
+			-- grap edge
+			if self.vy > 0 then
+				self.box = nil
+				local dx = map:collision({ self.x - 5 + self.dir * 1, self.y - 2, 10, 14 }, "x")
+				if dx ~= 0 then
+					local box = { self.x - 5 + self.dir * 3, self.y - 3, 10, 10 }
+					local dy = map:collision(box, "y")
+					box[2] = box[2] + dy
+
+--					if -10 < dy and dy < -3 then
+					if -10 < dy and dy <= -6 then
+
+						-- debug
+						--self.box = box
+
+						self.vy = 0
+						self.vx = 0
+						self.x = self.x + dx + self.dir
+						self.y = self.y + dy + 7
+						self.state = "cliff"
+					end
+				end
+			end
+
+
+		end
 
 
 		if self.rope_state == "off" and jump and not self.jump then
@@ -167,44 +220,30 @@ function Guy:update()
 --			self.rope_dy = 0
 --			self.rope_state = "extend"
 
-		elseif self.rope_state == "extend" then
-
-			local dx = self.dir / (2^0.5) * 10
-			local dy =       -1 / (2^0.5) * 10
-
-			self.rope_dx = self.rope_dx + dx
-			self.rope_dy = self.rope_dy + dy
-			self.rope_x = self.x + self.rope_dx
-			self.rope_y = self.y + self.rope_dy
-
-			self.rope_length = (self.rope_dx^2 + self.rope_dx^2)^0.5
-			if self.rope_length > self.rope_length_max then
-				self.rope_state = "curtail"
-			else
-
-				local d = map:rayIntersection(self.x, self.y, self.rope_dx, self.rope_dy)
-				if d and d <= 1 then
-					self.rope_length = self.rope_length * d
-					self.rope_state = "loose"
-					self.rope_x = self.x + self.rope_dx * d
-					self.rope_y = self.y + self.rope_dy * d
-				end
-
-			end
-
-
-		elseif self.rope_state == "curtail" then
-
-			self.rope_length = math.max(0, self.rope_length - 5)
-			if self.rope_length == 0 then
-				self.rope_state = "off"
-			else
-				local dx = self.rope_x - self.x
-				local dy = self.rope_y - self.y
-				local l = (dx^2 + dy^2)^0.5
-				self.rope_x = self.x + dx / l * self.rope_length
-				self.rope_y = self.y + dy / l * self.rope_length
-			end
+--		elseif self.rope_state == "extend" then
+--
+--			local dx = self.dir / (2^0.5) * 10
+--			local dy =       -1 / (2^0.5) * 10
+--
+--			self.rope_dx = self.rope_dx + dx
+--			self.rope_dy = self.rope_dy + dy
+--			self.rope_x = self.x + self.rope_dx
+--			self.rope_y = self.y + self.rope_dy
+--
+--			self.rope_length = (self.rope_dx^2 + self.rope_dx^2)^0.5
+--			if self.rope_length > self.rope_length_max then
+--				self.rope_state = "off"
+--			else
+--
+--				local d = map:rayIntersection(self.x, self.y, self.rope_dx, self.rope_dy)
+--				if d and d <= 1 then
+--					self.rope_length = self.rope_length * d
+--					self.rope_state = "loose"
+--					self.rope_x = self.x + self.rope_dx * d
+--					self.rope_y = self.y + self.rope_dy * d
+--				end
+--
+--			end
 
 		elseif self.rope_state ~= "off" then
 
@@ -217,12 +256,16 @@ function Guy:update()
 
 
 			if l > self.rope_length then
+				self.rope_state = "tight"
+
 				dx = dx / l
 				dy = dy / l
 
 				self.x = self.rope_x + dx * self.rope_length
 				self.y = self.rope_y + dy * self.rope_length
 
+
+				-- TODO: more collision checking
 
 
 				local ovx = self.vx
@@ -233,7 +276,6 @@ function Guy:update()
 				self.vy = dot * dx
 
 
-				self.rope_state = "tight"
 			else
 				self.rope_state = "loose"
 			end
@@ -244,20 +286,42 @@ function Guy:update()
 				if self.rope_state == "tight" then
 					self.vy = self.vy - 1
 				end
-				self.rope_state = "curtail"
+				self.rope_state = "off"
 			end
 		end
 
+	elseif self.state == "cliff" then
+
+		-- jump
+		if jump and not self.jump then
+			self.state = "air"
+			self.vy = -2.75
+			self.jump_control = true
+		end
 
 	end
+
+
+	-- curtail rope
+	if self.rope_state == "off" then
+		self.rope_length = math.max(0, self.rope_length - 5)
+		local dx = self.rope_x - self.x
+		local dy = self.rope_y - self.y
+		local l = (dx^2 + dy^2)^0.5
+		self.rope_x = self.x + dx / l * self.rope_length
+		self.rope_y = self.y + dy / l * self.rope_length
+	end
+
+
+	-- store buttons
 	self.jump = jump
 
 
+	-- animations
 	if ix == 0 then
 		self.tick = 0
 		self.anim = self.anims.idle
 	else
-		self.dir = ix
 		self.tick = self.tick + 1
 		self.anim = self.anims.run
 	end
@@ -271,13 +335,13 @@ function Guy:draw()
 
 	-- rope
 	G.setColor(178, 220, 239)
-	if self.rope_state ~= "off" then
+	if self.rope_length > 0 then
 		G.line(self.x, self.y, self.rope_x, self.rope_y)
 	end
 
 
 	local f = self.anim[math.floor(self.tick / self.frame_length) % #self.anim + 1]
-	if self.in_air then
+	if self.state == "air" then
 		if math.abs(self.vy) < 1 then
 			f = self.anims.jump[3]
 		elseif math.abs(self.vy) < 3 then
@@ -285,23 +349,24 @@ function Guy:draw()
 		else
 			f = self.anims.jump[1]
 		end
+	elseif self.state == "cliff" then
+		f = self.anims.cliff[1]
 	end
 
 
 	G.setColor(255, 255, 255)
 	G.draw(self.img, self.quads[f], math.floor(self.x + 0.5), math.floor(self.y + 0.5),
-		0, self.dir, 1, self.size / 2, self.size / 2)
+		0, self.dir, 1, 12, 4)
+
+
+	-- debug
+	if self.box then
+		G.rectangle("fill", unpack(self.box))
+	end
 
 
 
---	G.setColor(0, 255, 0)
---	local d = map:rayIntersection(self.x, self.y, -1, 1)
---	if d then
---		G.line(self.x, self.y, self.x - 1 * d, self.y + 1 * d)
---	end
-
-
---	G.setColor(255, 255, 255, 10)
+--	G.setColor(255, 0, 0, 100)
 --	G.rectangle("fill", self.x - 5, self.y - 2, 10, 14)
 end
 
