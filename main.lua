@@ -30,13 +30,15 @@ function love.draw()
 	screen:renderTo(function()
 		G.clear(0, 0, 0)
 
-		guy:draw()
 		map:draw()
+		guy:draw()
 
 	end)
 
+--	G.clear(10, 10, 10)
+
 	G.setColor(255, 255, 255)
-	G.clear(10, 10, 10)
+
 	local rx = G.getWidth() / 400
 	local ry = G.getHeight() / 240
 	if rx < ry then

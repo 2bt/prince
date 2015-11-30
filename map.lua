@@ -3,70 +3,51 @@ local G = love.graphics
 
 
 
-local function rayBoxIntersection(ox, oy, dx, dy, box)
-
-	if dx > 0 and ox <= box[1] then
-		local f = (box[1] - ox) / dx
-		local y = oy + dy * f
-		if box[2] <= y and y <= box[2] + box[4] then
-			return f
-		end
-	elseif dx < 0 and ox >= box[1] + box[3] then
-		local f = (box[1] + box[3] - ox) / dx
-		local y = oy + dy * f
-		if box[2] <= y and y <= box[2] + box[4] then
-			return f
-		end
-	end
-
-	if dy > 0 and oy <= box[2] then
-		local f = (box[2] - oy) / dy
-		local x = ox + dx * f
-		if box[1] <= x and x <= box[1] + box[3] then
-			return f
-		end
-	elseif dy < 0 and oy >= box[2] + box[4] then
-		local f = (box[2] + box[4] - oy) / dy
-		local x = ox + dx * f
-		if box[1] <= x and x <= box[1] + box[3] then
-			return f
-		end
-	end
-
-	return false
-end
-
-
-
-
-
-
 
 Map = Object:new {
+	img = G.newImage("tiles.png"),
 	boxes = {
-		{ 0, 200, 400, 40 },
-		{ 200, 150, 30, 30 },
-		{ 160, 180, 20, 20 },
-		{ 120, 120, 50, 5 },
-		{ 250, 70, 20, 20 },
-
-		{ 80, 90, 20, 20 },
-
-		{ 360, 120, 30, 60 },
-
-		{ 310, 60, 20, 20 },
-		{ 100, 0, 200, 15 },
+		{ 0, 208, 400, 32 },
+		{ 160, 120, 24, 24 },
+		{ 128, 144, 56, 16 },
+		{ 200, 8, 16, 64 },
+		{ 368, 96, 32, 24 },
+		{ 280, 56, 32, 16 },
+		{ 0, -8, 400, 16 },
+		{ 0, 128, 24, 80 },
+		{ 64, 192, 16, 16 },
+		{ 264, 192, 40, 16 },
+		{ 264, 128, 40, 4, ow=true },
+		{ 96, 72, 40, 4, ow=true },
+		{ 264, 160, 40, 4, ow=true },
+		{ 368, 64, 32, 4, ow=true },
+		{ 72, 160, 40, 4, ow=true },
 	}
 }
-
+genQuads(Map, 8)
 function Map:init()
 
 end
-function Map:collision(box, axis)
+function Map:collision(box, axis, dy)
 	local d = 0
 	for i, b in ipairs(self.boxes) do
-		local e = collision(box, b, axis)
-		if math.abs(e) > math.abs(d) then d = e end
+
+		if b.ow and dy ~= "cliff" then
+			if axis == "y" and dy then
+				if box[2] + box[4] > b[2]
+				and box[2] + box[4] - dy - 0.01 <= b[2]
+				and box[1] + box[3] > b[1] and box[1] < b[1] + b[3] then
+
+					local e = -(box[2] + box[4] - b[2])
+					if math.abs(e) > math.abs(d) then d = e end
+
+				end
+			end
+		else
+			local e = collision(box, b, axis)
+			if math.abs(e) > math.abs(d) then d = e end
+
+		end
 	end
 	return d
 end
@@ -74,16 +55,56 @@ end
 function Map:rayIntersection(ox, oy, dx, dy)
 	local d = nil
 	for i, b in ipairs(self.boxes) do
-		local e = rayBoxIntersection(ox, oy, dx, dy, b)
-		if e and (not d or e < d) then d = e end
+		if not b.ow then
+
+			local e = rayBoxIntersection(ox, oy, dx, dy, b)
+			if e and (not d or e < d) then d = e end
+		end
 	end
 	return d
 end
 
 
+
 function Map:draw()
-	G.setColor(200, 100, 100)
 	for i, b in ipairs(self.boxes) do
-		G.rectangle("fill", unpack(b))
+
+		if b.ow then
+			G.setColor(255, 255, 255)
+			for x = b[1], b[1] + b[3] - 1, 8 do
+				G.draw(self.img, self.quads[1], x, b[2])
+			end
+
+		else
+
+--			G.setColor(200, 100, 100)
+--			G.rectangle("fill", unpack(b))
+			G.setColor(255, 255, 255)
+
+
+
+			local iy2 = b[4]/8 - 1
+			local ix2 = b[3]/8 - 1
+
+			for iy = 0, iy2  do
+				local y = b[2] + iy * 8
+				for ix = 0, ix2  do
+					local x = b[1] + ix * 8
+
+
+					local m = 68 + bool[0 < ix] + bool[ix == ix2]
+					m = m + bool[0 < iy]*32 + bool[iy == iy2]*32
+
+					G.draw(self.img, self.quads[m], x, y)
+
+
+				end
+			end
+
+
+
+		end
+
+
 	end
 end

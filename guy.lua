@@ -2,28 +2,6 @@ local G = love.graphics
 local D = love.keyboard.isDown
 
 
-function collision(a, b, axis)
-	if a[1] >= b[1] + b[3]
-	or a[2] >= b[2] + b[4]
-	or a[1] + a[3] <= b[1]
-	or a[2] + a[4] <= b[2] then
-		return 0
-	end
-
-	local dx = b[1] + b[3] - a[1]
-	local dx2 = b[1] - a[1] - a[3]
-
-	local dy = b[2] + b[4] - a[2]
-	local dy2 = b[2] - a[2] - a[4]
-
-	if axis == "x" then
-		return math.abs(dx) < math.abs(dx2) and dx or dx2
-	else
-		return math.abs(dy) < math.abs(dy2) and dy or dy2
-	end
-end
-
-
 
 Guy = Object:new {
 	img = G.newImage("sprites.png"),
@@ -41,18 +19,26 @@ genQuads(Guy)
 function Guy:init()
 	self.tick = 0
 
-	self.x = 50
-	self.y = 50
+	self.x = 16
+	self.y = 108
 	self.dir = 1
 	self.vx = 0
 	self.vy = 0
+
+	self.state = "air"
+
+	self.grap_delay = 0
+
 
 	self.rope_length = 0
 	self.rope_state = "off"
 	self.rope_x = 0
 	self.rope_y = 0
-	self.state = "air"
+	self.rope_dx = 0
+	self.rope_dy = 0
 end
+
+
 
 
 function Guy:update()
@@ -62,6 +48,8 @@ function Guy:update()
 	local iy = bool[D"down"] - bool[D"up"]
 	local jump = D"x"
 
+
+	local dir = self.dir
 
 
 	if self.state == "floor" then
@@ -84,18 +72,9 @@ function Guy:update()
 			local m = math.max(1, math.abs(self.vx))
 			self.vx = math.max(-m, math.min(m, self.vx + ix * 0.175))
 		end
-
-	elseif self.state == "cliff" then
-
-		-- let go
-		if iy > 0
-		or ix == -self.dir then
-			self.state = "air"
-		end
-
 	end
 	if ix ~= 0 then
-		self.dir = ix
+		dir = ix
 	end
 
 
@@ -113,24 +92,36 @@ function Guy:update()
 
 
 
+	local oy = self.y
+
 	if self.state == "air" or self.state == "floor" then
 
-		self.vy = self.vy + 0.2		-- gravity
+		-- gravity
+		self.vy = self.vy + 0.2
+
 		local vy = math.min(3, math.max(-3, self.vy))
 		self.y = self.y + vy
 
-		-- horizontal collision
-		self.state = "air"
-		local dy = map:collision({ self.x - 5, self.y - 2, 10, 14 }, "y")
-		if dy ~= 0 then
-			self.y = self.y + dy
-			self.vy = 0
-			if dy < 0 then
-				self.state = "floor"
-			end
-		end
-
 	end
+
+
+	-- horizontal collision
+	floor = false
+	dy = map:collision({ self.x - 5, self.y - 2, 10, 14 }, "y", self.y - oy)
+	if dy ~= 0 then
+		self.y = self.y + dy
+		self.vy = 0
+		if dy < 0 then
+			floor = true
+		end
+	end
+	if not floor and self.state == "floor" then
+		self.state = "air"
+	elseif floor then
+		self.state = "floor"
+	end
+
+
 
 
 	if self.state == "floor" then
@@ -138,12 +129,15 @@ function Guy:update()
 
 		-- jump
 		if jump and not self.jump then
+			self.state = "air"
 			self.vy = -4
 			self.jump_control = true
+
 		end
 
 	elseif self.state == "air" then
 
+		-- control jump height
 		if self.jump_control then
 			if not jump and self.vy < -1 then
 				self.vy = -1
@@ -166,7 +160,7 @@ function Guy:update()
 				local min_dy
 				local i = 0
 				for a = 35, 90 do
-					local dx = math.cos(a * math.pi / 180) * self.dir
+					local dx = math.cos(a * math.pi / 180) * dir
 					local dy = -math.sin(a * math.pi / 180)
 					if not min_dx then
 						min_dx = dx
@@ -195,23 +189,23 @@ function Guy:update()
 
 
 			-- cliff hanger
-			elseif self.vy > 0 then
+			elseif self.vy > 0 and self.grap_delay == 0 then
 
-				self.box = nil
-				local dx = map:collision({ self.x - 5 + self.dir * 2, self.y - 2, 10, 14 }, "x")
-				if dx ~= 0 then
-					local box = { self.x - 5 + self.dir * 3, self.y - 7, 10, 10 }
-					local dy = map:collision(box, "y")
+				local dx = map:collision({ self.x - 5 + dir * 2, self.y - 2, 10, 14 }, "x", "cliff")
+				if dx ~= 0
+				and sign(dx) == -dir
+				and math.abs(dx) <= 6
+				then
+					local box = { self.x - 5 + dir * 3, self.y - 7, 10, 10 }
+					local dy = map:collision(box, "y", 5)
 					box[2] = box[2] + dy
 
-					if -7 < dy and dy <= -2 then
-
-						-- debug
-						--self.box = box
+					if map:collision(box, "y") == 0 and
+					-7 < dy and dy <= -2 then
 
 						self.vy = 0
 						self.vx = 0
-						self.x = self.x + dx + self.dir * 2
+						self.x = self.x + dx + dir * 2
 						self.y = self.y + dy + 3
 						self.state = "cliff"
 					end
@@ -263,11 +257,15 @@ function Guy:update()
 				dx = dx / l
 				dy = dy / l
 
-				self.x = self.rope_x + dx * self.rope_length
-				self.y = self.rope_y + dy * self.rope_length
-
-
 				-- TODO: more collision checking
+				self.x = self.rope_x + dx * self.rope_length
+				local cdx = map:collision({ self.x - 5, self.y - 2, 10, 14 }, "x")
+				self.x = self.x + cdx
+
+
+				self.y = self.rope_y + dy * self.rope_length
+				local cdy = map:collision({ self.x - 5, self.y - 2, 10, 14 }, "y", dy * self.rope_length)
+				self.y = self.y + cdy
 
 
 				local ovx = self.vx
@@ -294,8 +292,14 @@ function Guy:update()
 
 	elseif self.state == "cliff" then
 
+		-- let go
+		if iy > 0
+		or dir ~= self.dir then
+			self.state = "air"
+			self.grap_delay = 6
+
 		-- jump
-		if jump and not self.jump then
+		elseif jump and not self.jump then
 			self.state = "air"
 			self.vy = -2.75
 			self.jump_control = true
@@ -315,18 +319,25 @@ function Guy:update()
 		self.rope_y = self.y + dy / len * self.rope_length
 	end
 
+	if self.grap_delay > 0 then
+		self.grap_delay = self.grap_delay - 1
+	end
 
-	-- store buttons
+
 	self.jump = jump
-
+	self.dir = dir
 
 	-- animations
-	if ix == 0 then
-		self.tick = 0
-		self.anim = self.anims.idle
+	if self.state == "floor" then
+		if ix == 0 then
+			self.tick = 0
+			self.anim = self.anims.idle
+		else
+			self.tick = self.tick + 1
+			self.anim = self.anims.run
+		end
 	else
-		self.tick = self.tick + 1
-		self.anim = self.anims.run
+		self.anim = self.anims.jump
 	end
 
 
@@ -336,7 +347,7 @@ function Guy:draw()
 --	love.timer.sleep(0.1)
 
 
-	-- rope
+	-- chain
 	G.setColor(178, 220, 239)
 	local dx = self.rope_x - self.x
 	local dy = self.rope_y - self.y
@@ -348,20 +359,13 @@ function Guy:draw()
 		local x = self.x + (self.rope_x - self.x) * i / len
 		local y = self.y + (self.rope_y - self.y) * i / len
 
-		G.rectangle("fill", x-1, y-1, 2, 2)
+		G.rectangle("fill", x - 1, y - 1, 2, 2)
 	end
 
 
 	local f = self.anim[math.floor(self.tick / self.frame_length) % #self.anim + 1]
 	if self.state == "air" then
 		f = self.anims.jump[1]
---		if math.abs(self.vy) < 1 then
---			f = self.anims.jump[3]
---		elseif math.abs(self.vy) < 3 then
---			f = self.anims.jump[2]
---		else
---			f = self.anims.jump[1]
---		end
 	elseif self.state == "cliff" then
 		f = self.anims.cliff[1]
 	end
@@ -370,12 +374,6 @@ function Guy:draw()
 	G.setColor(255, 255, 255)
 	G.draw(self.img, self.quads[f], math.floor(self.x + 0.5), math.floor(self.y + 0.5),
 		0, self.dir, 1, 12, 4)
-
-
-	-- debug
-	if self.box then
-		G.rectangle("fill", unpack(self.box))
-	end
 
 
 

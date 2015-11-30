@@ -72,94 +72,68 @@ function makeQuads(w, h, s)
 end
 
 
-function transform(obj, model)
-	model = model or obj.model
-	local nx = math.sin(obj.ang or 0)
-	local ny = math.cos(obj.ang or 0)
-	for i = 1, #model, 2 do
-		local x = model[i]
-		local y = model[i + 1]
-		obj.trans_model[i] 		= obj.x + y * nx + x * ny
-		obj.trans_model[i + 1]	= obj.y - x * nx + y * ny
+function sign(x)
+	if x < 0 then return -1 end
+	return 1
+end
+
+
+function collision(a, b, axis)
+	if a[1] >= b[1] + b[3]
+	or a[2] >= b[2] + b[4]
+	or a[1] + a[3] <= b[1]
+	or a[2] + a[4] <= b[2] then
+		return 0
 	end
-	for i = #model + 1, #obj.trans_model do
-		obj.trans_model[i] = nil
+
+	local dx = b[1] + b[3] - a[1]
+	local dx2 = b[1] - a[1] - a[3]
+
+	local dy = b[2] + b[4] - a[2]
+	local dy2 = b[2] - a[2] - a[4]
+
+	if axis == "x" then
+		return math.abs(dx) < math.abs(dx2) and dx or dx2
+	else
+		return math.abs(dy) < math.abs(dy2) and dy or dy2
 	end
 end
 
-function polygonCollision(a, b)
-	local normal = {}
-	local where = {}
-	local distance = 9e99
 
-	for m = 1, 2 do
-		local p1x = a[#a - 1]
-		local p1y = a[#a]
-		for i = 1, #a, 2 do
-			local p2x = a[i]
-			local p2y = a[i + 1]
 
-			local c_d = 0
-			local c_n = {}
-			local c_w = {}
+function rayBoxIntersection(ox, oy, dx, dy, box)
 
-			local nx = p1y - p2y
-			local ny = p2x - p1x
-
-			for j = 1, #b, 2 do
-				local wx = b[j]
-				local wy = b[j + 1]
-
-				local d = (p1x - wx) * nx + (p1y - wy) * ny
-				if d > c_d then
-					c_d = d
-					c_n[1] = nx
-					c_n[2] = ny
-					c_w[1] = wx
-					c_w[2] = wy
-				end
-			end
-			if c_d == 0 then return 0 end
-			local l = math.sqrt(nx * nx + ny * ny)
-			c_d = c_d /  l
-
-			if c_d < distance then
-				distance = c_d
-				if m == 1 then l = -l end
-				normal[1] = nx / l
-				normal[2] = ny / l
-				where = c_w
-			end
-			p1x = p2x
-			p1y = p2y
+	if dx > 0 and ox <= box[1] then
+		local f = (box[1] - ox) / dx
+		local y = oy + dy * f
+		if box[2] <= y and y <= box[2] + box[4] then
+			return f
 		end
-		a, b = b, a
+	elseif dx < 0 and ox >= box[1] + box[3] then
+		local f = (box[1] + box[3] - ox) / dx
+		local y = oy + dy * f
+		if box[2] <= y and y <= box[2] + box[4] then
+			return f
+		end
 	end
-	return distance, normal, where
+
+	if dy > 0 and oy <= box[2] then
+		local f = (box[2] - oy) / dy
+		local x = ox + dx * f
+		if box[1] <= x and x <= box[1] + box[3] then
+			return f
+		end
+	elseif dy < 0 and oy >= box[2] + box[4] then
+		local f = (box[2] + box[4] - oy) / dy
+		local x = ox + dx * f
+		if box[1] <= x and x <= box[1] + box[3] then
+			return f
+		end
+	end
+
+	return false
 end
 
 
-function checkLineIntersection(ax, ay, bx, by, qx, qy, wx, wy)
 
-	local abx = bx - ax
-	local aby = by - ay
-	local qwx = wx - qx
-	local qwy = wy - qy
-	local aqx = qx - ax
-	local aqy = qy - ay
 
-	local det = abx*qwy - aby*qwx;
-	if math.abs(det) < 0.0001 then -- parallel
-		return
-	end
-
-	local abi = (aqx*qwy - aqy*qwx) / det
-	local qwi = (aqx*aby - aqy*abx) / det
-
-	if abi < 0 or abi > 1
-	or qwi < 0 or qwi > 1 then
-		return
-	end
-	return abi, qwi
-
-end
