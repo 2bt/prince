@@ -107,7 +107,7 @@ function Guy:update()
 
 	-- horizontal collision
 	floor = false
-	dy = map:collision({ self.x - 5, self.y - 2, 10, 14 }, "y", self.y - oy)
+	local dy = map:collision({ self.x - 5, self.y - 2, 10, 14 }, "y", self.y - oy)
 	if dy ~= 0 then
 		self.y = self.y + dy
 		self.vy = 0
@@ -128,10 +128,19 @@ function Guy:update()
 		self.rope_state = "off"
 
 		-- jump
-		if jump and not self.jump then
+		if jump and not self.jump and iy ~= 1 then
 			self.state = "air"
 			self.vy = -4
 			self.jump_control = true
+		end
+
+		-- drop
+		if jump and not self.jump and iy == 1 then
+			local dy = map:collision({ self.x - 5, self.y - 2 - 1, 10, 14 }, "y")
+			if dy == 0 then
+				self.state = "air"
+				self.y = self.y + 1
+			end
 
 		end
 
